@@ -1,14 +1,16 @@
 from time import sleep
-import cv2
+import cv2 # libreria para procesar imagen
 import numpy as np
-import easyocr
+import easyocr 
 import time
 import paho.mqtt.client as mqttclient
 import MySQLdb #libreria de base de dato
 
+# Conexión para la base de datos. 
 db=MySQLdb.connect(host="localhost",user="admin",passwd="password", database="placas")
 cur= db.cursor()
 
+# Función para conectar al servicio de MQTT
 def on_connect (client, usedata, flags, rc) :
     if rc==0:
         print("client is connected")
@@ -16,7 +18,7 @@ def on_connect (client, usedata, flags, rc) :
         connected=True
     else:
         print("client is not connected")
-        
+
 def ordenar_puntos(puntos):
     n_puntos = np.concatenate([puntos[0], puntos[1], puntos[2], puntos[3]]).tolist()
 
@@ -32,12 +34,15 @@ def ordenar_puntos(puntos):
 def has_numbers(string):
      return any(char.isdigit() for char in string)    
 reader = easyocr.Reader(["en"], gpu=False)
+
+#Conexión con la ruta del stream
 cap = cv2.VideoCapture("http://192.168.100.14:8081/0/stream/")
 #cap = cv2.VideoCapture("/dev/video1")
 connected=False
 broker_address="192.168.100.14"
 port=1883
 
+#Conexión MQTT
 client=mqttclient.Client ("MQTT")
 #client.username_pw_set (user, password=password)
 client.on_connect=on_connect
@@ -81,13 +86,16 @@ while True:
                result = reader.readtext(dst)
                #print(result)
                for res in result:
+			
                     if has_numbers(res[1])  and res[2]>0.80 :
                          print(res[1].replace(" ","").replace("-","")) #res[1] texto placa
                          print(res[2])
+			
                          val=cur.execute("""SELECT * from placas_carros WHERE texto=%s;""",(str(res[1].replace(" ","").replace("-","")),))#validacion 1 cuando placa es encontrada en la base y 0 sino
                          print(val)
                          print(type(val))
                          if val==0:
+				# Se agrega la alarma a la base de datos local
                          	client.publish("outTopic", "0")
                          	cur.execute("""INSERT INTO alarmaPlaca(placa) VALUES(%s);""",(str(res[1]),))
                          	db.commit()
